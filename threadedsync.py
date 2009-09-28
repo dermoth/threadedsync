@@ -49,6 +49,7 @@ class runsync(Thread):
         self.queue = queue
         self.num = num
     def run(self):
+        global shutdown
         while True:
             # Shutdown?
             if shutdown:
@@ -66,11 +67,23 @@ class runsync(Thread):
                 try:
                     os.rename(os.path.join(localsrcdir,file), os.path.join(localdstdir,file))
                 except OSError, e:
-                    if e[0] == ENOENT: print 'WARNING: Thread', self.num, 'file', file, 'vanished'
-                    else: raise
+                    if e[0] == ENOENT:
+                        print 'WARNING: Thread', self.num, 'file', file, 'vanished during transfer'
+                    else:
+                        # Trigger shutdown so we know about it
+                        print 'CRITICAL: Unhandled exception in thread', self.num + '. Shutting down...'
+                        shutdown = True
+                        raise
                 inprocess.remove(file)
                 print 'Thread', self.num, 'finished file', file
             else:
+                # Avoid looping if a file is removed while waiting in queue
+                try: os.stat(file)
+                except OSError, e:
+                    if e[0] == ENOENT:
+                        print 'WARNING: Thread', self.num, 'file', file, 'vanished while in queue'
+                        inprocess.remove(file)
+                        continue
                 self.queue.append(file)
                 print 'Thread', self.num, 'failed on file (will try again)', file
 
