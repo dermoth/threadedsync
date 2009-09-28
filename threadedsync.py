@@ -34,11 +34,11 @@ def rsync(file):
     try:
         my_rc = os.waitpid(rs.pid, 0)
     except OSError, e:
-        print "Execution failed:", e
+        print 'WARNING: rsync execution failed:', e
         return False
 
     if my_rc[1] != 0:
-        print 'rsync failed with error:', str(my_rc[1] >> 8)
+        print 'WARNING: rsync failed with error:', str(my_rc[1] >> 8)
         return False
 
     return True
@@ -53,7 +53,7 @@ class runsync(Thread):
         while True:
             # Shutdown?
             if shutdown:
-                print 'Thread', self.num, 'exiting...'
+                print 'INFO: Thread', self.num, 'exiting...'
                 return
 
             try:
@@ -62,7 +62,7 @@ class runsync(Thread):
                 sleep(1)
                 continue
 
-            print 'Thread', self.num, 'starting file', file
+            print 'INFO: Thread', self.num, 'starting file', file
             if rsync(file):
                 try:
                     os.rename(os.path.join(localsrcdir,file), os.path.join(localdstdir,file))
@@ -75,7 +75,7 @@ class runsync(Thread):
                         shutdown = True
                         raise
                 inprocess.remove(file)
-                print 'Thread', self.num, 'finished file', file
+                print 'INFO: Thread', self.num, 'finished file', file
             else:
                 # Avoid looping if a file is removed while waiting in queue
                 try: os.stat(file)
@@ -85,7 +85,7 @@ class runsync(Thread):
                         inprocess.remove(file)
                         continue
                 self.queue.append(file)
-                print 'Thread', self.num, 'failed on file (will try again)', file
+                print 'WARNING: Thread', self.num, 'failed on file (will try again)', file
 
 # Global queue and thread pool
 globalqueue = deque()
@@ -97,6 +97,7 @@ for t in range(0, threads):
     threadpool[t].start()
 
 # Main loop
+print 'INFO: Threads launched, beginning main loop.'
 while True:
     try:
         for f in os.listdir(localsrcdir):
@@ -106,14 +107,14 @@ while True:
             inprocess.add(f)
     except OSError, e:
         if e[0] == EAGAIN:
-            print 'Error in os.listdir():', e[1]
-            print 'Will try again in 10 seconds...'
+            print 'WARNING: Error in os.listdir():', str(e[1]) + '. Will try again in 10 seconds...'
         else:
+            print 'CRITICAL: Unhandled exception in main thread. Shutting down...'
             shutdown = True
             raise
 
     sleep(10)
     if shutdown: break
 
-print "System shutdown, waiting for threads to exit..."
+print 'INFO: System shutdown, waiting for threads to exit...'
 
