@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import sys, os
+from errno import ENOENT, EAGAIN
 from signal import signal, SIGTERM, SIGINT, SIGHUP, SIG_IGN
 from threading import Thread
 from subprocess import Popen
@@ -62,12 +63,16 @@ class runsync(Thread):
 
             print 'Thread', self.num, 'starting file', file
             if rsync(file):
-                os.rename(os.path.join(localsrcdir,file), os.path.join(localdstdir,file))
+                try:
+                    os.rename(os.path.join(localsrcdir,file), os.path.join(localdstdir,file))
+                except OSError, e:
+                    if e[0] == ENOENT: print 'WARNING: Thread', self.num, 'file', file, 'vanished'
+                    else: raise
                 inprocess.remove(file)
                 print 'Thread', self.num, 'finished file', file
             else:
                 self.queue.append(file)
-                print 'Thread', self.num, 'failed on file', file
+                print 'Thread', self.num, 'failed on file (will try again)', file
 
 # Global queue and thread pool
 globalqueue = deque()
@@ -80,11 +85,20 @@ for t in range(0, threads):
 
 # Main loop
 while True:
-    for f in os.listdir(localsrcdir):
-        if os.path.isdir(os.path.join(localsrcdir, f)): continue
-        if f in inprocess: continue
-        globalqueue.append(f)
-        inprocess.add(f)
+    try:
+        for f in os.listdir(localsrcdir):
+            if os.path.isdir(os.path.join(localsrcdir, f)): continue
+            if f in inprocess: continue
+            globalqueue.append(f)
+            inprocess.add(f)
+    except OSError, e:
+        if e[0] == EAGAIN:
+            print 'Error in os.listdir():', e[1]
+            print 'Will try again in 10 seconds...'
+        else:
+            shutdown = True
+            raise
+
     sleep(10)
     if shutdown: break
 
