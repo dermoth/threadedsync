@@ -30,7 +30,7 @@ signal(SIGTERM, handler)
 
 
 def rsync(file):
-    rs = Popen(['/usr/bin/rsync', '-a', '-e', '/usr/bin/ssh -i /path/to/ssh.key', '--partial', os.path.join(localsrcdir,file), os.path.join(remotedst, file)], shell=False)
+    rs = Popen(['/usr/bin/rsync', '-a', '-e', '/usr/bin/ssh -i /path/to/ssh.key', os.path.join(localsrcdir,file), os.path.join(remotedst, file)], shell=False)
     try:
         my_rc = os.waitpid(rs.pid, 0)
     except OSError, e:
